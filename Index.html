@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1f2937; }
+    </style>
+</head>
+<body x-data="salesApp()" x-init="initApp()" class="pb-24">
+
+    <template x-if="!isConfigured">
+        <div class="fixed inset-0 bg-emerald-800 flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                <div class="text-center mb-6">
+                    <div class="bg-emerald-100 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i data-lucide="trending-up" class="w-8 h-8"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800">Selamat Datang ke Sales Tracker</h2>
+                    <p class="text-gray-500 text-sm mt-1">Sila isi maklumat perniagaan anda untuk bermula.</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Anda</label>
+                        <input type="text" x-model="setup.namaPengguna" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Bisnes / Kedai</label>
+                        <input type="text" x-model="setup.namaBisnes" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <button @click="saveSetup()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl transition duration-200 shadow-md">
+                        Mula Guna Aplikasi
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <header class="bg-emerald-700 text-white p-4 sticky top-0 shadow-md z-40">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-black tracking-wide">SALES TRACKER</h1>
+                <p class="text-xs text-emerald-100 font-medium" x-text="profil.namaBisnes"></p>
+            </div>
+            <div class="text-right">
+                <span class="text-xs block opacity-75" x-text="formatTarikhHariIni()"></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto p-4 space-y-6">
+
+        <div x-show="notifikasi" x-text="notifikasi" x-transition class="bg-emerald-600 text-white p-3 rounded-xl shadow-lg font-medium text-center text-sm fixed top-16 left-1/2 -translate-x-1/2 w-11/12 max-w-xs z-50"></div>
+
+        <div x-show="tabAktif === 'dashboard'" x-cloak class="space-y-6">
+            <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 text-white rounded-2xl p-6 shadow-lg">
+                <p class="text-sm opacity-80" x-text="'Selamat Datang, ' + profil.namaPengguna"></p>
+                <h2 class="text-3xl font-black mt-1" x-text="formatRM(kiraDashboardSalesHariIni())">RM0.00</h2>
+                <p class="text-xs opacity-75 mt-1">Jumlah Jualan Hari Ini</p>
+                
+                <div class="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-emerald-500/30">
+                    <div>
+                        <span class="text-2xl font-bold block" x-text="kiraDashboardUnitHariIni()">0</span>
+                        <span class="text-xs opacity-75">Unit Terjual</span>
+                    </div>
+                    <div>
+                        <span class="text-2xl font-bold block" x-text="kiraDashboardProdukAktifHariIni()">0</span>
+                        <span class="text-xs opacity-75">Produk Berjual</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <button @click="tabAktif = 'tambah_sales'; resetBorangSales();" class="bg-emerald-600 text-white p-4 rounded-xl shadow font-bold text-center flex flex-col items-center justify-center gap-2 hover:bg-emerald-700 transition">
+                    <i data-lucide="plus-circle" class="w-6 h-6"></i> Tambah Sales
+                </button>
+                <button @click="tabAktif = 'rekod'" class="bg-white text-gray-800 p-4 rounded-xl shadow font-bold text-center flex flex-col items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 transition">
+                    <i data-lucide="list" class="w-6 h-6 text-emerald-600"></i> Lihat Rekod
+                </button>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow border border-gray-100">
+                <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-emerald-600"></i> Prestasi 7 Hari Terakhir
+                </h3>
+                <div class="h-48 relative">
+                    <canvas id="grafDashboard"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow border border-gray-100">
+                <h3 class="font-bold text-gray-800 mb-3">Ringkasan Produk Hari Ini</h3>
+                <div class="space-y-2">
+                    <template x-for="item in dapatkanRingkasanProdukHariIni()" :key="item.id">
+                        <div class="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+                            <span class="text-gray-700 font-medium" x-text="item.nama"></span>
+                            <span class="font-bold text-emerald-600" x-text="formatRM(item.jumlah)"></span>
+                        </div>
+                    </template>
+                    <template x-if="dapatkanRingkasanProdukHariIni().length === 0">
+                        <div class="text-center py-4 text-gray-400 text-sm">Tiada jualan direkodkan hari ini.</div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="tabAktif === 'produk'" x-cloak class="space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800">Produk Saya</h2>
+                <button @click="bukaModalProduk()" class="bg-emerald-600 text-white px-3 py-2 rounded-xl font-bold text-sm flex items-center gap-1 shadow">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Tambah
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+                <template x-for="p in senaraiProduk" :key="p.id">
+                    <div @click="lihatDetailProduk(p)" class="bg-white rounded-xl p-4 shadow border border-gray-100 flex gap-4 items-center cursor-pointer hover:border-emerald-300 transition">
+                        <div class="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden border">
+                            <template x-if="p.gambar_produk">
+                                <img :src="p.gambar_produk" class="w-full h-full object-cover">
+                            </template>
+                            <template x-if="!p.gambar_produk">
+                                <i data-lucide="package" class="w-8 h-8 text-gray-400"></i>
+                            </template>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-gray-800 truncate" x-text="p.nama_produk"></h4>
+                                <span :class="p.status ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'" class="text-[10px] font-bold px-2 py-0.5 rounded-full" x-text="p.status ? 'Aktif' : 'Nyahaktif'"></span>
+                            </div>
+                            <p class="text-xs text-gray-400" x-text="p.kategori || 'Tiada Kategori'"></p>
+                            <p class="text-sm font-semibold text-gray-600 mt-1" x-text="'Harga: ' + formatRM(p.harga)"></p>
+                            <div class="text-xs text-emerald-600 font-bold mt-1" x-text="'Total Sales: ' + formatRM(kiraTotalSalesProduk(p.id))"></div>
+                        </div>
+                        <i data-lucide="chevron-right" class="w-5 h-5 text-gray-400"></i>
+                    </div>
+                </template>
+                <template x-if="senaraiProduk.length === 0">
+                    <div class="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300 p-6">
+                        <i data-lucide="box" class="w-12 h-12 text-gray-300 mx-auto mb-2"></i>
+                        <p class="text-gray-500 font-medium">Belum ada produk disimpan.</p>
+                        <p class="text-xs text-gray-400 mt-1">Sila klik butang Tambah di atas untuk memasukkan produk pertama anda.</p>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div x-show="tabAktif === 'tambah_sales'" x-cloak class="space-y-4">
+            <h2 class="text-xl font-bold text-gray-800" x-text="isEditSales ? 'Edit Rekod Sales' : 'Tambah Sales Baru'"></h2>
+            
+            <div class="bg-white rounded-2xl p-4 shadow border border-gray-100 space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Tarikh Jualan</label>
+                        <input type="date" x-model="borangSales.tarikh" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Masa Jualan</label>
+                        <input type="time" x-model="borangSales.masa" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Nama Pelanggan (Opsional)</label>
+                    <input type="text" x-model="borangSales.nama_pelanggan" placeholder="cth: Ammar" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                </div>
+
+                <div class="border-t pt-3">
+                    <span class="block text-xs font-semibold text-gray-500 mb-2">Senarai Item Jualan</span>
+                    
+                    <div class="space-y-3">
+                        <template x-for="(item, index) in borangSales.items" :key="index">
+                            <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 relative space-y-2">
+                                <button @click="buangItemSales(index)" class="absolute top-2 right-2 text-red-500 p-1 hover:bg-red-50 rounded">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                                
+                                <div>
+                                    <label class="block text-[11px] font-bold text-gray-500">Pilih Produk</label>
+                                    <select x-model="item.produk_id" @change="kemaskiniHargaItemSales(index)" class="w-full text-sm bg-white border p-2 rounded-lg mt-1">
+                                        <option value="">-- Pilih Produk --</option>
+                                        <template x-for="p in senaraiProduk.filter(prod => prod.status)" :key="p.id">
+                                            <option :value="p.id" x-text="p.nama_produk"></option>
+                                        </template>
+                                    </select>
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-gray-500">Kuantiti</label>
+                                        <input type="number" min="1" x-model.number="item.kuantiti" @input="kiraKiraanAutomatisBorang()" class="w-full text-sm bg-white border p-1.5 rounded-lg mt-1">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-gray-500">Harga Seunit</label>
+                                        <input type="number" step="0.01" x-model.number="item.harga_seunit" @input="kiraKiraanAutomatisBorang()" class="w-full text-sm bg-white border p-1.5 rounded-lg mt-1">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-gray-500">Diskaun (RM)</label>
+                                        <input type="number" step="0.01" x-model.number="item.diskaun" @input="kiraKiraanAutomatisBorang()" class="w-full text-sm bg-white border p-1.5 rounded-lg mt-1">
+                                    </div>
+                                </div>
+                                <div class="text-right text-xs font-bold text-gray-700">
+                                    Subjumlah: <span x-text="formatRM(item.jumlah)"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <button @click="tambahItemSalesBaru()" class="w-full mt-2 border border-dashed border-emerald-500 text-emerald-600 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 flex items-center justify-center gap-1">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Tambah Item Produk
+                    </button>
+                </div>
+
+                <div class="border-t pt-3 grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Kaedah Pembayaran</label>
+                        <select x-model="borangSales.kaedah_pembayaran" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                            <option value="Cash">Cash</option>
+                            <option value="Online Transfer">Online Transfer</option>
+                            <option value="QR Pay">QR Pay</option>
+                            <option value="Kad">Kad</option>
+                            <option value="Lain-lain">Lain-lain</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Nota Jualan</label>
+                        <input type="text" x-model="borangSales.nota" placeholder="cth: Urgent" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                    </div>
+                </div>
+
+                <div class="bg-gray-900 text-white p-4 rounded-xl space-y-1 text-sm font-medium">
+                    <div class="flex justify-between opacity-80"><span>Total Kuantiti:</span> <span x-text="borangSales.totalKuantiti + ' unit'"></span></div>
+                    <div class="flex justify-between opacity-80"><span>Total Diskaun:</span> <span x-text="formatRM(borangSales.totalDiskaun)"></span></div>
+                    <div class="flex justify-between text-base font-bold text-emerald-400 pt-1 border-t border-gray-700">
+                        <span>JUMLAH BESAR:</span> <span x-text="formatRM(borangSales.jumlah_keseluruhan)"></span>
+                    </div>
+                </div>
+
+                <div class="space-y-2 pt-2">
+                    <button @click="simpanSales(false)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow transition">
+                        Simpan Sales
+                    </button>
+                    <button x-show="!isEditSales" @click="simpanSales(true)" class="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-2.5 rounded-xl text-sm transition">
+                        Simpan & Tambah Sales Baru
+                    </button>
+                    <button @click="tabAktif = 'dashboard'; resetBorangSales();" class="w-full bg-white text-gray-500 font-semibold py-2 rounded-xl text-sm border hover:bg-gray-50 transition text-center block">
+                        Batal
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="tabAktif === 'rekod'" x-cloak class="space-y-4">
+            <h2 class="text-xl font-bold text-gray-800">Rekod Jualan</h2>
+
+            <div class="bg-white p-4 rounded-2xl shadow border border-gray-100 space-y-3">
+                <div class="relative">
+                    <input type="text" x-model="penapisRekod.carian" placeholder="Cari nama produk..." class="w-full pl-9 pr-4 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-3"></i>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 mb-0.5">Tapis Tarikh</label>
+                        <input type="date" x-model="penapisRekod.tarikh" class="w-full p-1.5 border rounded-lg text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 mb-0.5">Kategori Produk</label>
+                        <select x-model="penapisRekod.kategori" class="w-full p-1.5 border rounded-lg text-xs">
+                            <option value="">Semua</option>
+                            <template x-for="kat in senaraiKategori" :key="kat">
+                                <option :value="kat" x-text="kat"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 mb-0.5">Kaedah Bayaran</label>
+                    <select x-model="penapisRekod.kaedah" class="w-full p-1.5 border rounded-lg text-xs">
+                        <option value="">Semua</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Online Transfer">Online Transfer</option>
+                        <option value="QR Pay">QR Pay</option>
+                        <option value="Kad">Kad</option>
+                        <option value="Lain-lain">Lain-lain</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <template x-for="s in rekodSalesDitapis" :key="s.id">
+                    <div class="bg-white rounded-xl p-4 shadow border border-gray-100 space-y-2">
+                        <div class="flex justify-between items-start border-b pb-2">
+                            <div>
+                                <span class="text-xs text-gray-400 block" x-text="s.tarikh + ' | ' + s.masa"></span>
+                                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full" x-text="s.kaedah_pembayaran"></span>
+                                <template x-if="s.nama_pelanggan">
+                                    <span class="text-xs text-gray-600 block mt-1" x-text="'Pelanggan: ' + s.nama_pelanggan"></span>
+                                </template>
+                            </div>
+                            <div class="text-right">
+                                <span class="font-black text-gray-800 text-base block" x-text="formatRM(s.jumlah_keseluruhan)"></span>
+                                <div class="flex gap-2 justify-end mt-1">
+                                    <button @click="editSales(s)" class="text-blue-500 hover:text-blue-600 text-xs font-semibold">Edit</button>
+                                    <button @click="padamSales(s.id)" class="text-red-500 hover:text-red-600 text-xs font-semibold">Padam</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <template x-for="item in dapatkanItemBagiSales(s.id)" :key="item.id">
+                                <div class="flex justify-between text-xs text-gray-600">
+                                    <span x-text="item.nama_produk + ' (x' + item.kuantiti + ')'"></span>
+                                    <span x-text="formatRM(item.jumlah)"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <template x-if="s.nota">
+                            <p class="text-[11px] bg-gray-50 text-gray-500 p-1 rounded border-l-2 border-emerald-500" x-text="'Nota: ' + s.nota"></p>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-if="rekodSalesDitapis.length === 0">
+                    <div class="text-center py-12 bg-white rounded-2xl border p-6 text-gray-400 text-sm">
+                        <i data-lucide="receipt" class="w-12 h-12 text-gray-300 mx-auto mb-2"></i>
+                        Tiada rekod jualan ditemui.
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div x-show="tabAktif === 'laporan'" x-cloak class="space-y-6" x-init="$watch('pilihanLaporan.tempoh', value => janaLaporan())">
+            <h2 class="text-xl font-bold text-gray-800">Laporan Jualan</h2>
+
+            <div class="bg-white p-4 rounded-2xl shadow border border-gray-100 space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Pilih Tempoh Masa</label>
+                    <select x-model="pilihanLaporan.tempoh" @change="janaLaporan()" class="w-full text-sm border p-2 rounded-lg bg-gray-50 font-medium">
+                        <option value="hari_ini">Hari Ini</option>
+                        <option value="semalam">Semalam</option>
+                        <option value="minggu_ini">Minggu Ini</option>
+                        <option value="bulan_ini">Bulan Ini</option>
+                        <option value="pilih_tarikh">Pilih Tarikh Spesifik</option>
+                        <option value="julat_tarikh">Pilih Julat Tarikh</option>
+                    </select>
+                </div>
+
+                <div x-show="pilihanLaporan.tempoh === 'pilih_tarikh'" class="grid grid-cols-1 gap-2">
+                    <input type="date" x-model="pilihanLaporan.tarikhMula" @change="janaLaporan()" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                </div>
+
+                <div x-show="pilihanLaporan.tempoh === 'julat_tarikh'" class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold block">Dari</label>
+                        <input type="date" x-model="pilihanLaporan.tarikhMula" @change="janaLaporan()" class="w-full text-xs border p-1.5 rounded-lg bg-gray-50">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold block">Hingga</label>
+                        <input type="date" x-model="pilihanLaporan.tarikhTamat" @change="janaLaporan()" class="w-full text-xs border p-1.5 rounded-lg bg-gray-50">
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+                <div class="bg-white p-3 rounded-xl shadow border text-center">
+                    <span class="text-[11px] text-gray-400 font-bold block">Total Sales</span>
+                    <span class="text-sm font-black text-emerald-600 mt-1 block" x-text="formatRM(dataLaporan.totalSales)"></span>
+                </div>
+                <div class="bg-white p-3 rounded-xl shadow border text-center">
+                    <span class="text-[11px] text-gray-400 font-bold block">Unit Terjual</span>
+                    <span class="text-sm font-black text-gray-800 mt-1 block" x-text="dataLaporan.unitTerjual"></span>
+                </div>
+                <div class="bg-white p-3 rounded-xl shadow border text-center">
+                    <span class="text-[11px] text-gray-400 font-bold block">Transaksi</span>
+                    <span class="text-sm font-black text-gray-800 mt-1 block" x-text="dataLaporan.bilTransaksi"></span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl">
+                    <span class="text-[10px] text-amber-700 font-bold block uppercase tracking-wider">Paling Laris (Unit)</span>
+                    <span class="text-xs font-bold text-gray-800 mt-1 block truncate" x-text="dataLaporan.produkTerlaris || '-'"></span>
+                </div>
+                <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+                    <span class="text-[10px] text-emerald-700 font-bold block uppercase tracking-wider">Sales Tertinggi (RM)</span>
+                    <span class="text-xs font-bold text-gray-800 mt-1 block truncate" x-text="dataLaporan.produkSalesTertinggi || '-'"></span>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow border">
+                <h3 class="font-bold text-xs text-gray-400 uppercase tracking-wider mb-2">Graf Prestasi Masa</h3>
+                <div class="h-44 relative">
+                    <canvas id="grafMasaLaporan"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow border">
+                <h3 class="font-bold text-xs text-gray-400 uppercase tracking-wider mb-2">Carta Produk Paling Laris</h3>
+                <div class="h-44 relative">
+                    <canvas id="grafProdukLaporan"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow border space-y-4">
+                <div>
+                    <h4 class="font-bold text-sm border-b pb-1 text-gray-800">Pecahan Mengikut Produk</h4>
+                    <div class="divide-y text-xs mt-2">
+                        <template x-for="p in dataLaporan.pecahanProduk" :key="p.nama">
+                            <div class="flex justify-between py-1.5">
+                                <span x-text="p.nama"></span>
+                                <span class="font-bold text-gray-700" x-text="formatRM(p.jumlah)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-bold text-sm border-b pb-1 text-gray-800">Pecahan Mengikut Kategori</h4>
+                    <div class="divide-y text-xs mt-2">
+                        <template x-for="k in dataLaporan.pecahanKategori" :key="k.kategori">
+                            <div class="flex justify-between py-1.5">
+                                <span x-text="k.kategori || 'Tiada Kategori'"></span>
+                                <span class="font-bold text-gray-700" x-text="formatRM(k.jumlah)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-bold text-sm border-b pb-1 text-gray-800">Pecahan Mengikut Kaedah Pembayaran</h4>
+                    <div class="divide-y text-xs mt-2">
+                        <template x-for="m in dataLaporan.pecahanKaedah" :key="m.kaedah">
+                            <div class="flex justify-between py-1.5">
+                                <span x-text="m.kaedah"></span>
+                                <span class="font-bold text-gray-700" x-text="formatRM(m.jumlah)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button @click="eksportCSV()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 rounded-xl text-sm shadow flex items-center justify-center gap-2">
+                    <i data-lucide="download" class="w-4 h-4"></i> Eksport CSV
+                </button>
+                <button @click="eksportCetak()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-sm shadow flex items-center justify-center gap-2">
+                    <i data-lucide="printer" class="w-4 h-4"></i> Cetak PDF / Laporan
+                </button>
+            </div>
+        </div>
+
+        <div x-show="tabAktif === 'tetapan'" x-cloak class="space-y-4">
+            <h2 class="text-xl font-bold text-gray-800">Tetapan Sistem</h2>
+
+            <div class="bg-white rounded-2xl p-4 shadow border border-gray-100 space-y-4">
+                <h3 class="font-bold text-gray-700 text-sm border-b pb-2">Kemaskini Profil</h3>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Nama Pengguna</label>
+                    <input type="text" x-model="profil.namaPengguna" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Nama Bisnes</label>
+                    <input type="text" x-model="profil.namaBisnes" class="w-full text-sm border p-2 rounded-lg bg-gray-50">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Simbol Mata Wang</label>
+                    <input type="text" x-model="profil.mataWang" class="w-full text-sm border p-2 rounded-lg bg-gray-50" readonly>
+                    <p class="text-[10px] text-gray-400 mt-1">* RM diletakkan sebagai mata wang utama kekal.</p>
+                </div>
+                <button @click="simpanProfilAplikasi()" class="bg-emerald-600 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-emerald-700 transition">
+                    Simpan Profil
+                </button>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow border border-gray-100 space-y-3">
+                <h3 class="font-bold text-gray-700 text-sm border-b pb-2">Sistem Sandaran (Backup & Restore)</h3>
+                <button @click="backupData()" class="w-full text-left bg-gray-50 hover:bg-gray-100 p-2.5 rounded-lg font-semibold text-xs border flex items-center gap-2">
+                    <i data-lucide="file-up" class="w-4 h-4 text-emerald-600"></i> Muat Turun Fail Backup (.json)
+                </button>
+                <div class="border border-dashed p-3 rounded-lg bg-gray-50">
+                    <label class="block text-[11px] font-bold text-gray-500 mb-1">Restore Data Fail Backup</label>
+                    <input type="file" @change="restoreData($event)" class="text-xs w-full">
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow border border-red-100 space-y-3">
+                <h3 class="font-bold text-red-600 text-sm border-b pb-2">Zon Bahaya</h3>
+                <button @click="padamSemuaDataMutlak()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1">
+                    <i data-lucide="alert-triangle" class="w-4 h-4"></i> PADAM SEMUA DATA APLIKASI
+                </button>
+            </div>
+        </div>
+
+        <div x-show="tabAktif === 'detail_produk'" x-cloak class="space-y-4">
+            <button @click="tabAktif = 'produk'" class="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Kembali ke senarai
+            </button>
+
+            <div class="bg-white rounded-2xl p-5 shadow border border-gray-100 space-y-4" x-if="produkTerpilih">
+                <div class="flex gap-4 items-center">
+                    <div class="w-20 h-20 bg-gray-100 rounded-xl flex items-center justify-center border overflow-hidden">
+                        <template x-if="produkTerpilih.gambar_produk">
+                            <img :src="produkTerpilih.gambar_produk" class="w-full h-full object-cover">
+                        </template>
+                        <template x-if="!produkTerpilih.gambar_produk">
+                            <i data-lucide="package" class="w-10 h-10 text-gray-300"></i>
+                        </template>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black text-gray-800" x-text="produkTerpilih.nama_produk"></h2>
+                        <p class="text-xs text-gray-400 font-medium" x-text="produkTerpilih.kategori || 'Tiada Kategori'"></p>
+                        <p class="text-base font-bold text-emerald-600 mt-1" x-text="formatRM(produkTerpilih.harga)"></p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 pt-2 border-t">
+                    <div class="bg-gray-50 p-2 rounded-lg">
+                        <span class="text-[10px] text-gray-400 font-bold block uppercase">Total Terjual</span>
+                        <span class="text-base font-bold text-gray-800" x-text="kiraUnitTerjualProdukSpecific(produkTerpilih.id) + ' Unit'"></span>
+                    </div>
+                    <div class="bg-gray-50 p-2 rounded-lg">
+                        <span class="text-[10px] text-gray-400 font-bold block uppercase">Total Sales Jualan</span>
+                        <span class="text-base font-bold text-emerald-600" x-text="formatRM(kiraTotalSalesProduk(produkTerpilih.id))"></span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div class="p-2 border rounded-xl">
+                        <span class="text-[10px] text-gray-400 block font-semibold">Hari Ini</span>
+                        <span class="font-bold text-gray-700" x-text="formatRM(kiraSalesProdukTempoh(produkTerpilih.id, 'hari'))"></span>
+                    </div>
+                    <div class="p-2 border rounded-xl">
+                        <span class="text-[10px] text-gray-400 block font-semibold">Minggu Ini</span>
+                        <span class="font-bold text-gray-700" x-text="formatRM(kiraSalesProdukTempoh(produkTerpilih.id, 'minggu'))"></span>
+                    </div>
+                    <div class="p-2 border rounded-xl">
+                        <span class="text-[10px] text-gray-400 block font-semibold">Bulan Ini</span>
+                        <span class="font-bold text-gray-700" x-text="formatRM(kiraSalesProdukTempoh(produkTerpilih.id, 'bulan'))"></span>
+                    </div>
+                </div>
+
+                <div class="h-40 relative border rounded-xl p-2">
+                    <canvas id="grafProdukSpecific"></canvas>
+                </div>
+
+                <div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Sejarah Jualan Produk</h3>
+                    <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        <template x-for="r in dapatkanSejarahJualanProdukSpecific(produkTerpilih.id)" :key="r.id">
+                            <div class="flex justify-between text-xs border-b py-1.5 last:border-0">
+                                <div>
+                                    <span class="font-medium text-gray-800 block" x-text="r.tarikh"></span>
+                                    <span class="text-[10px] text-gray-400" x-text="'Kuantiti: ' + r.kuantiti"></span>
+                                </div>
+                                <span class="font-bold text-emerald-600" x-text="formatRM(r.jumlah)"></span>
+                            </div>
+                        </template>
+                        <template x-if="dapatkanSejarahJualanProdukSpecific(produkTerpilih.id).length === 0">
+                            <p class="text-center text-xs text-gray-400 py-4">Tiada sejarah jualan lagi.</p>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 pt-2 border-t">
+                    <button @click="bukaModalProduk(produkTerpilih)" class="bg-gray-800 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-gray-900 transition text-center">
+                        Edit Maklumat Produk
+                    </button>
+                    <button @click="padamProduk(produkTerpilih.id)" class="bg-red-50 text-red-600 border border-red-200 text-xs font-bold py-2.5 rounded-xl hover:bg-red-100 transition text-center">
+                        Padam Produk
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-2 z-40">
+        <div class="max-w-md mx-auto grid grid-cols-5 gap-1 text-center">
+            <button @click="tukarTab('dashboard')" :class="tabAktif === 'dashboard' ? 'text-emerald-600 font-bold' : 'text-gray-400 font-medium'" class="flex flex-col items-center py-1 transition">
+                <i data-lucide="layout-dashboard" class="w-5 h-5 mb-0.5"></i>
+                <span class="text-[10px]">Dashboard</span>
+            </button>
+            <button @click="tukarTab('produk')" :class="tabAktif === 'produk' || tabAktif === 'detail_produk' ? 'text-emerald-600 font-bold' : 'text-gray-400 font-medium'" class="flex flex-col items-center py-1 transition">
+                <i data-lucide="box" class="w-5 h-5 mb-0.5"></i>
+                <span class="text-[10px]">Produk</span>
+            </button>
+            <button @click="tukarTab('tambah_sales'); resetBorangSales();" :class="tabAktif === 'tambah_sales' ? 'text-emerald-600 font-bold' : 'text-gray-400 font-medium'" class="flex flex-col items-center py-1 transition">
+                <i data-lucide="plus-circle" class="w-5 h-5 mb-0.5"></i>
+                <span class="text-[10px]">+ Sales</span>
+            </button>
+            <button @click="tukarTab('rekod')" :class="tabAktif === 'rekod' ? 'text-emerald-600 font-bold' : 'text-gray-400 font-medium'" class="flex flex-col items-center py-1 transition">
+                <i data-lucide="receipt" class="w-5 h-5 mb-0.5"></i>
+                <span class="text-[10px]">Rekod</span>
+            </button>
+            <button @click="tukarTab('laporan')" :class="tabAktif === 'laporan' ? 'text-emerald-600 font-bold' : 'text-gray-400 font-medium'" class="flex flex-col items-center py-1 transition">
+                <i data-lucide="pie-chart" class="w-5 h-5 mb-0.5"></i>
+                <span class="text-[10px]">Laporan</span>
+            </button>
+            </div>
+    </nav>
+    
+    <div class="fixed bottom-16 right-4 z-40">
+        <button @click="tabAktif = 'tetapan'" class="bg-gray-800 text-white p-3 rounded-full shadow-xl hover:bg-gray-900 transition">
+            <i data-lucide="settings" class="w-5 h-5"></i>
+        </button>
+    </div>
+
+
+    <div x-show="modalProdukTerbuka" x-cloak class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl space-y-4">
+            <h3 class="text-lg font-bold text-gray-800" x-text="isEditProduk ? 'Kemaskini Produk' : 'Tambah Produk Baru'"></h3>
+            
+            <div class="space-y-3 text-sm">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Nama Produk *</label>
+                    <input type="text" x-model="borangProduk.nama_produk" class="w-full border p-2 rounded-lg bg-gray-50">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Kategori Produk</label>
+                    <input type="text" x-model="borangProduk.kategori" placeholder="cth: Makanan, Pakaian" class="w-full border p-2 rounded-lg bg-gray-50">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Harga Jualan Seunit (RM) *</label>
+                    <input type="number" step="0.01" x-model.number="borangProduk.harga" class="w-full border p-2 rounded-lg bg-gray-50">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Gambar Produk (Pautan URL / Base64)</label>
+                    <input type="text" x-model="borangProduk.gambar_produk" placeholder="Masukkan url gambar atau kosongkan" class="w-full border p-2 rounded-lg bg-gray-50">
+                    <div class="mt-1 flex items-center gap-2">
+                        <span class="text-[10px] text-gray-400">Atau upload fail ringkas:</span>
+                        <input type="file" @change="tukarGambarProdukFail($event)" class="text-[10px] text-gray-500 max-w-[150px]">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="status_prod" x-model="borangProduk.status" class="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500">
+                    <label style="user-select: none;" for="status_prod" class="text-xs font-semibold text-gray-700">Aktifkan produk untuk jualan</label>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button @click="modalProdukTerbuka = false" class="bg-gray-100 text-gray-600 font-semibold py-2 rounded-xl text-sm border hover:bg-gray-200 transition">
+                    Batal
+                </button>
+                <button @click="simpanProduk()" class="bg-emerald-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-emerald-700 transition">
+                    Simpan
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        function salesApp() {
+            return {
+                isConfigured: false,
+                tabAktif: 'dashboard',
+                notifikasi: '',
+                
+                // Data Kekal Aplikasi
+                profil: { namaPengguna: '', namaBisnes: '', mataWang: 'RM' },
+                setup: { namaPengguna: '', namaBisnes: '' },
+                senaraiProduk: [],
+                senaraiSales: [],
+                senaraiItemSales: [],
+
+                // Keadaan Borang & Modal
+                modalProdukTerbuka: false,
+                isEditProduk: false,
+                borangProduk: { id: null, nama_produk: '', kategori: '', harga: 0, gambar_produk: '', status: true },
+                
+                isEditSales: false,
+                borangSales: { id: null, tarikh: '', masa: '', items: [], kaedah_pembayaran: 'Cash', nama_pelanggan: '', nota: '', totalKuantiti: 0, totalDiskaun: 0, jumlah_keseluruhan: 0 },
+                
+                produkTerpilih: null, // Untuk Halaman Detail Produk
+
+                // Penapis Halaman Rekod
+                penapisRekod: { carian: '', tarikh: '', kategori: '', kaedah: '' },
+
+                // Halaman Laporan
+                pilihanLaporan: { tempoh: 'bulan_ini', tarikhMula: '', tarikhTamat: '' },
+                dataLaporan: { totalSales: 0, unitTerjual: 0, bilTransaksi: 0, produkTerlaris: '', produkSalesTertinggi: '', pecahanProduk: [], pecahanKategori: [], pecahanKaedah: [] },
+
+                // Chart Instances
+                chartDashboard: null,
+                chartMasaLaporan: null,
+                chartProdukLaporan: null,
+                chartProdukSpecific: null,
+
+                initApp() {
+                    // Load data dari localstorage
+                    if(localStorage.getItem('st_configured')) this.isConfigured = true;
+                    if(localStorage.getItem('st_profil')) this.profil = JSON.parse(localStorage.getItem('st_profil'));
+                    if(localStorage.getItem('st_produk')) this.senaraiProduk = JSON.parse(localStorage.getItem('st_produk'));
+                    if(localStorage.getItem('st_sales')) this.senaraiSales = JSON.parse(localStorage.getItem('st_sales'));
+                    if(localStorage.getItem('st_itemsales')) this.senaraiItemSales = JSON.parse(localStorage.getItem('st_itemsales'));
+
+                    // Tetapan Awal Tarikh Penapis Laporan
+                    let hariIni = new Date().toISOString().split('T')[0];
+                    this.pilihanLaporan.tarikhMula = hariIni;
+                    this.pilihanLaporan.tarikhTamat = hariIni;
+
+                    setTimeout(() => { 
+                        lucide.createIcons(); 
+                        this.kemaskiniGrafDashboard();
+                    }, 300);
+                },
+
+                paparNotifikasi(mesej) {
+                    this.notifikasi = mesej;
+                    setTimeout(() => { this.notifikasi = ''; }, 3000);
+                },
+
+                formatRM(nilai) {
+                    return 'RM ' + parseFloat(nilai || 0).toFixed(2);
+                },
+
+                formatTarikhHariIni() {
+                    let d = new Date();
+                    return d.toLocaleDateString('ms-MY', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                },
+
+                saveSetup() {
+                    if(!this.setup.namaPengguna || !this.setup.namaBisnes) {
+                        alert('Sila isi kedua-dua ruangan.');
+                        return;
+                    }
+                    this.profil.namaPengguna = this.setup.namaPengguna;
+                    this.profil.namaBisnes = this.setup.namaBisnes;
+                    this.isConfigured = true;
+                    localStorage.setItem('st_configured', 'true');
+                    this.simpanProfilAplikasi();
+                    this.kemaskiniGrafDashboard();
+                },
+
+                simpanProfilAplikasi() {
+                    localStorage.setItem('st_profil', JSON.stringify(this.profil));
+                    this.paparNotifikasi('Profil berjaya disimpan.');
+                },
+
+                tukarTab(tab) {
+                    this.tabAktif = tab;
+                    setTimeout(() => { lucide.createIcons(); }, 50);
+                    if(tab === 'dashboard') {
+                        this.kemaskiniGrafDashboard();
+                    } else if (tab === 'laporan') {
+                        this.janaLaporan();
+                    }
+                },
+
+                get senaraiKategori() {
+                    let kats = this.senaraiProduk.map(p => p.kategori).filter(k => k);
+                    return [...new Set(kats)];
+                },
+
+                // ================= PENGURUSAN PRODUK =================
+                bukaModalProduk(prod = null) {
+                    if(prod) {
+                        this.isEditProduk = true;
+                        this.borangProduk = { ...prod };
+                    } else {
+                        this.isEditProduk = false;
+                        this.borangProduk = { id: null, nama_produk: '', kategori: '', harga: '', gambar_produk: '', status: true };
+                    }
+                    this.modalProdukTerbuka = true;
+                },
+
+                tukarGambarProdukFail(e) {
+                    let file = e.target.files[0];
+                    if (file) {
+                        let reader = new FileReader();
+                        reader.onload = (el) => {
+                            this.borangProduk.gambar_produk = el.target.result;
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                },
+
+                simpanProduk() {
+                    if(!this.borangProduk.nama_produk || this.borangProduk.harga === '') {
+                        alert('Nama produk dan harga wajib diisi.');
+                        return;
+                    }
+
+                    if(this.isEditProduk) {
+                        let idx = this.senaraiProduk.findIndex(p => p.id === this.borangProduk.id);
+                        if(idx !== -1) this.senaraiProduk[idx] = { ...this.borangProduk };
+                    } else {
+                        this.borangProduk.id = Date.now();
+                        this.borangProduk.tarikh_dicipta = new Date().toISOString();
+                        this.senaraiProduk.push({ ...this.borangProduk });
+                    }
+
+                    localStorage.setItem('st_produk', JSON.stringify(this.senaraiProduk));
+                    this.modalProdukTerbuka = false;
+                    this.paparNotifikasi('Produk berjaya disimpan.');
+                    
+                    if(this.produkTerpilih && this.produkTerpilih.id === this.borangProduk.id) {
+                        this.produkTerpilih = { ...this.borangProduk };
+                    }
+                    this.tukarTab('produk');
+                },
+
+                padamProduk(id) {
+                    if(confirm('Adakah anda pasti mahu memadam produk ini? Rekod jualan lama bagi produk ini tidak akan dipadam, tetapi produk tidak akan dipaparkan lagi.')) {
+                        this.senaraiProduk = this.senaraiProduk.filter(p => p.id !== id);
+                        localStorage.setItem('st_produk', JSON.stringify(this.senaraiProduk));
+                        this.paparNotifikasi('Produk berjaya dipadam.');
+                        this.tabAktif = 'produk';
+                        setTimeout(() => { lucide.createIcons(); }, 50);
+                    }
+                },
+
+                lihatDetailProduk(prod) {
+                    this.produkTerpilih = prod;
+                    this.tabAktif = 'detail_produk';
+                    setTimeout(() => { 
+                        lucide.createIcons(); 
+                        this.kemaskiniGrafProdukSpecific(prod.id);
+                    }, 100);
+                },
+
+                kiraTotalSalesProduk(produkId) {
+                    return this.senaraiItemSales
+                        .filter(item => item.produk_id == produkId)
+                        .reduce((sum, item) => sum + (item.jumlah || 0), 0);
+                },
+
+                kiraUnitTerjualProdukSpecific(produkId) {
+                    return this.senaraiItemSales
+                        .filter(item => item.produk_id == produkId)
+                        .reduce((sum, item) => sum + (item.kuantiti || 0), 0);
+                },
+
+                // ================= PENGURUSAN BORANG SALES =================
+                resetBorangSales() {
+                    let d = new Date();
+                    let tarikhStr = d.toISOString().split('T')[0];
+                    let masaStr = d.toTimeString().split(' ')[0].substring(0, 5);
+
+                    this.isEditSales = false;
+                    this.borangSales = {
+                        id: null,
+                        tarikh: tarikhStr,
+                        masa: masaStr,
+                        items: [{ produk_id: '', harga_seunit: 0, kuantiti: 1, diskaun: 0, jumlah: 0 }],
+                        kaedah_pembayaran: 'Cash',
+                        nama_pelanggan: '',
+                        nota: '',
+                        totalKuantiti: 0,
+                        totalDiskaun: 0,
+                        jumlah_keseluruhan: 0
+                    };
+                },
+
+                tambahItemSalesBaru() {
+                    this.borangSales.items.push({ produk_id: '', harga_seunit: 0, kuantiti: 1, diskaun: 0, jumlah: 0 });
+                    setTimeout(() => { lucide.createIcons(); }, 50);
+                },
+
+                buangItemSales(index) {
+                    this.borangSales.items.splice(index, 1);
+                    this.kiraKiraanAutomatisBorang();
+                },
+
+                kemaskiniHargaItemSales(index) {
+                    let item = this.borangSales.items[index];
+                    let prod = this.senaraiProduk.find(p => p.id == item.produk_id);
+                    if(prod) {
+                        item.harga_seunit = prod.harga;
+                    }
+                    this.kiraKiraanAutomatisBorang();
+                },
+
+                kiraKiraanAutomatisBorang() {
+                    let totalKuantiti = 0;
+                    let totalDiskaun = 0;
+                    let jumlahBesar = 0;
+
+                    this.borangSales.items.forEach(item => {
+                        let kuantiti = parseInt(item.kuantiti) || 0;
+                        let harga = parseFloat(item.harga_seunit) || 0;
+                        let diskaun = parseFloat(item.diskaun) || 0;
+                        
+                        let subTotal = (harga * kuantiti) - diskaun;
+                        if(subTotal < 0) subTotal = 0;
+                        
+                        item.jumlah = subTotal;
+                        totalKuantiti += kuantiti;
+                        totalDiskaun += diskaun;
+                        jumlahBesar += subTotal;
+                    });
+
+                    this.borangSales.totalKuantiti = totalKuantiti;
+                    this.borangSales.totalDiskaun = totalDiskaun;
+                    this.borangSales.jumlah_keseluruhan = jumlahBesar;
+                },
+
+                simpanSales(tambahLagi = false) {
+                    this.kiraKiraanAutomatisBorang();
+                    
+                    // Validasi mudah
+                    let adaItemSah = this.borangSales.items.every(i => i.produk_id && i.kuantiti > 0);
+                    if(!adaItemSah || this.borangSales.items.length === 0) {
+                        alert('Sila pastikan semua item produk dan kuantiti dipilih dengan betul.');
+                        return;
+                    }
+
+                    let salesId = this.borangSales.id || Date.now();
+                    
+                    let dataSales = {
+                        id: salesId,
+                        tarikh: this.borangSales.tarikh,
+                        masa: this.borangSales.masa,
+                        jumlah_keseluruhan: this.borangSales.jumlah_keseluruhan,
+                        jumlah_diskaun: this.borangSales.totalDiskaun,
+                        kaedah_pembayaran: this.borangSales.kaedah_pembayaran,
+                        nama_pelanggan: this.borangSales.nama_pelanggan,
+                        nota: this.borangSales.nota,
+                        tarikh_dicipta: new Date().toISOString()
+                    };
+
+                    // Hapus item lama jika mod Edit sebelum overwrite semula
+                    if(this.isEditSales) {
+                        this.senaraiSales = this.senaraiSales.filter(s => s.id !== salesId);
+                        this.senaraiItemSales = this.senaraiItemSales.filter(item => item.sales_id !== salesId);
+                    }
+
+                    // Masukkan Rekod Induk
+                    this.senaraiSales.push(dataSales);
+
+                    // Masukkan Rekod Anak Item
+                    this.borangSales.items.forEach(item => {
+                        let prod = this.senaraiProduk.find(p => p.id == item.produk_id);
+                        this.senaraiItemSales.push({
+                            id: Date.now() + Math.random(),
+                            sales_id: salesId,
+                            produk_id: item.produk_id,
+                            nama_produk: prod ? prod.nama_produk : 'Produk Tidak Diketahui',
+                            harga_seunit: item.harga_seunit,
+                            kuantiti: item.kuantiti,
+                            diskaun: item.diskaun,
+                            jumlah: item.jumlah
+                        });
+                    });
+
+                    // Simpan ke LocalStorage
+                    localStorage.setItem('st_sales', JSON.stringify(this.senaraiSales));
+                    localStorage.setItem('st_itemsales', JSON.stringify(this.senaraiItemSales));
+
+                    this.paparNotifikasi('Rekod sales berjaya disimpan.');
+
+                    if(tambahLagi) {
+                        this.resetBorangSales();
+                    } else {
+                        this.tukarTab('dashboard');
+                    }
+                },
+
+                editSales(sales) {
+                    this.isEditSales = true;
+                    let itemsUntukSales = this.senaraiItemSales.filter(item => item.sales_id === sales.id);
+                    
+                    this.borangSales = {
+                        id: sales.id,
+                        tarikh: sales.tarikh,
+                        masa: sales.masa,
+                        kaedah_pembayaran: sales.kaedah_pembayaran,
+                        nama_pelanggan: sales.nama_pelanggan || '',
+                        nota: sales.nota || '',
+                        items: itemsUntukSales.map(i => ({
+                            produk_id: i.produk_id,
+                            harga_seunit: i.harga_seunit,
+                            kuantiti: i.kuantiti,
+                            diskaun: i.diskaun,
+                            jumlah: i.jumlah
+                        }))
+                    };
+                    
+                    this.kiraKiraanAutomatisBorang();
+                    this.tabAktif = 'tambah_sales';
+                    setTimeout(() => { lucide.createIcons(); }, 50);
+                },
+
+                padamSales(id) {
+                    if(confirm('Adakah anda pasti mahu memadam rekod sales ini secara kekal?')) {
+                        this.senaraiSales = this.senaraiSales.filter(s => s.id !== id);
+                        this.senaraiItemSales = this.senaraiItemSales.filter(item => item.sales_id !== id);
+                        
+                        localStorage.setItem('st_sales', JSON.stringify(this.senaraiSales));
+                        localStorage.setItem('st_itemsales', JSON.stringify(this.senaraiItemSales));
+                        
+                        this.paparNotifikasi('Rekod jualan telah dipadam.');
+                        if(this.tabAktif === 'dashboard') this.kemaskiniGrafDashboard();
+                    }
+                },
+
+                // ================= LOGIK DASHBOARD & COGANGAN =================
+                kiraDashboardSalesHariIni() {
+                    let hariIni = new Date().toISOString().split('T')[0];
+                    return this.senaraiSales
+                        .filter(s => s.tarikh === hariIni)
+                        .reduce((sum, s) => sum + (s.jumlah_keseluruhan || 0), 0);
+                },
+
+                kiraDashboardUnitHariIni() {
+                    let hariIni = new Date().toISOString().split('T')[0];
+                    let salesIdHariIni = this.senaraiSales.filter(s => s.tarikh === hariIni).map(s => s.id);
+                    return this.senaraiItemSales
+                        .filter(item => salesIdHariIni.includes(item.sales_id))
+                        .reduce((sum, item) => sum + (item.kuantiti || 0), 0);
+                },
+
+                kiraDashboardProdukAktifHariIni() {
+                    let hariIni = new Date().toISOString().split('T')[0];
+                    let salesIdHariIni = this.senaraiSales.filter(s => s.tarikh === hariIni).map(s => s.id);
+                    let prods = this.senaraiItemSales.filter(item => salesIdHariIni.includes(item.sales_id)).map(item => item.produk_id);
+                    return [...new Set(prods)].length;
+                },
+
+                dapatkanRingkasanProdukHariIni() {
+                    let hariIni = new Date().toISOString().split('T')[0];
+                    let salesIdHariIni = this.senaraiSales.filter(s => s.tarikh === hariIni).map(s => s.id);
+                    let items = this.senaraiItemSales.filter(item => salesIdHariIni.includes(item.sales_id));
+                    
+                    let kompilasi = {};
+                    items.forEach(it => {
+                        if(!kompilasi[it.produk_id]) {
+                            kompilasi[it.produk_id] = { nama: it.nama_produk, jumlah: 0 };
+                        }
+                        kompilasi[it.produk_id].jumlah += it.jumlah;
+                    });
+                    return Object.values(kompilasi);
+                },
+
+                dapatkanItemBagiSales(salesId) {
+                    return this.senaraiItemSales.filter(i => i.sales_id === salesId);
+                },
+
+                get rekodSalesDitapis() {
+                    return this.senaraiSales.filter(s => {
+                        // Tapis Tarikh
+                        if(this.penapisRekod.tarikh && s.tarikh !== this.penapisRekod.tarikh) return false;
+                        // Tapis Kaedah Pembayaran
+                        if(this.penapisRekod.kaedah && s.kaedah_pembayaran !== this.penapisRekod.kaedah) return false;
+                        
+                        let items = this.dapatkanItemBagiSales(s.id);
+                        
+                        // Tapis Carian Nama Produk
+                        if(this.penapisRekod.carian) {
+                            let matchCarian = items.some(i => i.nama_produk.toLowerCase().includes(this.penapisRekod.carian.toLowerCase()));
+                            if(!matchCarian) return false;
+                        }
+
+                        // Tapis Kategori Produk
+                        if(this.penapisRekod.kategori) {
+                            let matchKategori = items.some(i => {
+                                let p = this.senaraiProduk.find(prod => prod.id == i.produk_id);
+                                return p && p.kategori === this.penapisRekod.kategori;
+                            });
+                            if(!matchKategori) return false;
+                        }
+
+                        return true;
+                    }).sort((a,b) => b.id - a.id); // Susun paling baru di atas
+                },
+
+                // ================= LOGIK DETAIL PRODUK SPECIFIC =================
+                dapatkanSejarahJualanProdukSpecific(produkId) {
+                    return this.senaraiItemSales
+                        .filter(i => i.produk_id == produkId)
+                        .map(i => {
+                            let parent = this.senaraiSales.find(s => s.id === i.sales_id);
+                            return {
+                                id: i.id,
+                                tarikh: parent ? parent.tarikh : '-',
+                                kuantiti: i.kuantiti,
+                                jumlah: i.jumlah
+                            }
+                        }).sort((a,b) => new Date(b.tarikh) - new Date(a.tarikh));
+                },
+
+                kiraSalesProdukTempoh(produkId, jenis) {
+                    let sekarang = new Date();
+                    let items = this.senaraiItemSales.filter(i => i.produk_id == produkId);
+                    
+                    return items.reduce((sum, item) => {
+                        let parent = this.senaraiSales.find(s => s.id === item.sales_id);
+                        if(!parent) return sum;
+                        let tJualan = new Date(parent.tarikh);
+                        
+                        if(jenis === 'hari') {
+                            let hariIni = sekarang.toISOString().split('T')[0];
+                            return parent.tarikh === hariIni ? sum + item.jumlah : sum;
+                        } else if(jenis === 'minggu') {
+                            let bezaMasa = sekarang - tJualan;
+                            let bezaHari = bezaMasa / (1000 * 60 * 60 * 24);
+                            return bezaHari <= 7 ? sum + item.jumlah : sum;
+                        } else if(jenis === 'bulan') {
+                            return tJualan.getMonth() === sekarang.getMonth() && tJualan.getFullYear() === sekarang.getFullYear() ? sum + item.jumlah : sum;
+                        }
+                        return sum;
+                    }, 0);
+                },
+
+                // ================= PENJANAAN LAPORAN & GRAF =================
+                janaLaporan() {
+                    let mula, tamat;
+                    let skrg = new Date();
+                    
+                    if(this.pilihanLaporan.tempoh === 'hari_ini') {
+                        let str = skrg.toISOString().split('T')[0];
+                        mula = tamat = str;
+                    } else if(this.pilihanLaporan.tempoh === 'semalam') {
+                        let semalam = new Date();
+                        semalam.setDate(skrg.getDate() - 1);
+                        let str = semalam.toISOString().split('T')[0];
+                        mula = tamat = str;
+                    } else if(this.pilihanLaporan.tempoh === 'minggu_ini') {
+                        let isnin = new Date(skrg);
+                        let day = isnin.getDay(), diff = isnin.getDate() - day + (day == 0 ? -6:1);
+                        isnin.setDate(diff);
+                        mula = isnin.toISOString().split('T')[0];
+                        tamat = skrg.toISOString().split('T')[0];
+                    } else if(this.pilihanLaporan.tempoh === 'bulan_ini') {
+                        mula = new Date(skrg.getFullYear(), skrg.getMonth(), 1).toISOString().split('T')[0];
+                        tamat = new Date(skrg.getFullYear(), skrg.getMonth() + 1, 0).toISOString().split('T')[0];
+                    } else {
+                        mula = this.pilihanLaporan.tarikhMula;
+                        tamat = this.pilihanLaporan.tarikhTamat;
+                    }
+
+                    // Tapis Sales Mengikut Julat Masa
+                    let salesTerlibat = this.senaraiSales.filter(s => s.tarikh >= mula && s.tarikh <= tamat);
+                    let salesIdTerlibat = salesTerlibat.map(s => s.id);
+                    let itemsTerlibat = this.senaraiItemSales.filter(i => salesIdTerlibat.includes(i.sales_id));
+
+                    // Kira Asas
+                    this.dataLaporan.totalSales = salesTerlibat.reduce((sum, s) => sum + s.jumlah_keseluruhan, 0);
+                    this.dataLaporan.unitTerjual = itemsTerlibat.reduce((sum, i) => sum + i.kuantiti, 0);
+                    this.dataLaporan.bilTransaksi = salesTerlibat.length;
+
+                    // Pecahan Produk
+                    let pecProd = {};
+                    let pecKat = {};
+                    let pecKaedah = {};
+
+                    itemsTerlibat.forEach(i => {
+                        if(!pecProd[i.nama_produk]) pecProd[i.nama_produk] = { nama: i.nama_produk, jumlah: 0, unit: 0 };
+                        pecProd[i.nama_produk].jumlah += i.jumlah;
+                        pecProd[i.nama_produk].unit += i.kuantiti;
+
+                        let prodObj = this.senaraiProduk.find(p => p.id == i.produk_id);
+                        let kat = prodObj ? prodObj.kategori : 'Tiada Kategori';
+                        if(!pecKat[kat]) pecKat[kat] = { kategori: kat, jumlah: 0 };
+                        pecKat[kat].jumlah += i.jumlah;
+                    });
+
+                    salesTerlibat.forEach(s => {
+                        if(!pecKaedah[s.kaedah_pembayaran]) pecKaedah[s.kaedah_pembayaran] = { kaedah: s.kaedah_pembayaran, jumlah: 0 };
+                        pecKaedah[s.kaedah_pembayaran].jumlah += s.jumlah_keseluruhan;
+                    });
+
+                    this.dataLaporan.pecahanProduk = Object.values(pecProd).sort((a,b) => b.jumlah - a.jumlah);
+                    this.dataLaporan.pecahanKategori = Object.values(pecKat);
+                    this.dataLaporan.pecahanKaedah = Object.values(pecKaedah);
+
+                    // Tentukan Terlaris
+                    let susunUnit = [...this.dataLaporan.pecahanProduk].sort((a,b) => b.unit - a.unit);
+                    this.dataLaporan.produkTerlaris = susunUnit[0] ? susunUnit[0].nama + ' (' + susunUnit[0].unit + ' unit)' : '-';
+                    this.dataLaporan.produkSalesTertinggi = this.dataLaporan.pecahanProduk[0] ? this.dataLaporan.pecahanProduk[0].nama + ' (' + this.formatRM(this.dataLaporan.pecahanProduk[0].jumlah) + ')' : '-';
+
+                    // Kemaskini Graf Laporan Masa & Produk
+                    setTimeout(() => {
+                        this.kemaskiniGrafMasaLaporan(salesTerlibat);
+                        this.kemaskiniGrafProdukLaporan(this.dataLaporan.pecahanProduk);
+                    }, 50);
+                },
+
+                // GRAF INTEGRASI CHART.JS
+                kemaskiniGrafDashboard() {
+                    let labels = [];
+                    let data = [];
+                    for(let i=6; i>=0; i--) {
+                        let d = new Date();
+                        d.setDate(d.getDate() - i);
+                        let str = d.toISOString().split('T')[0];
+                        labels.push(d.toLocaleDateString('ms-MY', { day: 'numeric', month: 'short' }));
+                        
+                        let totalDaySales = this.senaraiSales.filter(s => s.tarikh === str).reduce((sum, s) => sum + s.jumlah_keseluruhan, 0);
+                        data.push(totalDaySales);
+                    }
+
+                    if(this.chartDashboard) this.chartDashboard.destroy();
+                    let ctx = document.getElementById('grafDashboard');
+                    if(!ctx) return;
+                    this.chartDashboard = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Sales (RM)',
+                                data: data,
+                                borderColor: '#059669',
+                                backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.3
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+                    });
+                },
+
+                kemaskiniGrafMasaLaporan(sales) {
+                    let kompilasi = {};
+                    sales.forEach(s => {
+                        kompilasi[s.tarikh] = (kompilasi[s.tarikh] || 0) + s.jumlah_keseluruhan;
+                    });
+                    let urutanTarikh = Object.keys(kompilasi).sort();
+                    let data = urutanTarikh.map(t => kompilasi[t]);
+
+                    if(this.chartMasaLaporan) this.chartMasaLaporan.destroy();
+                    let ctx = document.getElementById('grafMasaLaporan');
+                    if(!ctx) return;
+                    this.chartMasaLaporan = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: urutanTarikh,
+                            datasets: [{ label: 'Sales (RM)', data: data, backgroundColor: '#059669' }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                },
+
+                kemaskiniGrafProdukLaporan(pecahanProduk) {
+                    let labels = pecahanProduk.slice(0,5).map(p => p.nama);
+                    let data = pecahanProduk.slice(0,5).map(p => p.unit);
+
+                    if(this.chartProdukLaporan) this.chartProdukLaporan.destroy();
+                    let ctx = document.getElementById('grafProdukLaporan');
+                    if(!ctx) return;
+                    this.chartProdukLaporan = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{ data: data, backgroundColor: ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'] }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                },
+
+                kemaskiniGrafProdukSpecific(produkId) {
+                    let labels = [];
+                    let data = [];
+                    for(let i=6; i>=0; i--) {
+                        let d = new Date();
+                        d.setDate(d.getDate() - i);
+                        let str = d.toISOString().split('T')[0];
+                        labels.push(d.toLocaleDateString('ms-MY', { day: 'numeric', month: 'short' }));
+
+                        let parentSalesIds = this.senaraiSales.filter(s => s.tarikh === str).map(s => s.id);
+                        let totalDayProductSales = this.senaraiItemSales
+                            .filter(item => item.produk_id == produkId && parentSalesIds.includes(item.sales_id))
+                            .reduce((sum, item) => sum + item.jumlah, 0);
+                        data.push(totalDayProductSales);
+                    }
+
+                    if(this.chartProdukSpecific) this.chartProdukSpecific.destroy();
+                    let ctx = document.getElementById('grafProdukSpecific');
+                    if(!ctx) return;
+                    this.chartProdukSpecific = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{ label: 'Sales Produk (RM)', data: data, borderColor: '#3B82F6', tension: 0.2, fill: false }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                },
+
+                // BACKUP & RESTORE DATA MANUAL
+                backupData() {
+                    let dataSistem = {
+                        profil: this.profil,
+                        produk: this.senaraiProduk,
+                        sales: this.senaraiSales,
+                        itemsales: this.senaraiItemSales
+                    };
+                    let str = JSON.stringify(dataSistem);
+                    let dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(str);
+                    
+                    let link = document.createElement('a');
+                    link.setAttribute('href', dataUri);
+                    link.setAttribute('download', 'SalesTracker_Backup_' + new Date().toISOString().split('T')[0] + '.json');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
+
+                restoreData(e) {
+                    let file = e.target.files[0];
+                    if(!file) return;
+                    let reader = new FileReader();
+                    reader.onload = (el) => {
+                        try {
+                            let data = JSON.parse(el.target.result);
+                            if(data.profil && data.produk && data.sales && data.itemsales) {
+                                this.profil = data.profil;
+                                this.senaraiProduk = data.produk;
+                                this.senaraiSales = data.sales;
+                                this.senaraiItemSales = data.itemsales;
+
+                                localStorage.setItem('st_profil', JSON.stringify(this.profil));
+                                localStorage.setItem('st_produk', JSON.stringify(this.senaraiProduk));
+                                localStorage.setItem('st_sales', JSON.stringify(this.senaraiSales));
+                                localStorage.setItem('st_itemsales', JSON.stringify(this.senaraiItemSales));
+
+                                alert('Data berjaya dipulihkan (Restored)!');
+                                window.location.reload();
+                            } else {
+                                alert('Format fail backup tidak sah.');
+                            }
+                        } catch(err) {
+                            alert('Gagal membaca fail backup.');
+                        }
+                    };
+                    reader.readAsText(file);
+                },
+
+                padamSemuaDataMutlak() {
+                    if(confirm('AMARAN: Anda akan memadam semua data produk dan rekod jualan secara kekal. Adakah anda benar-benar pasti?')) {
+                        if(confirm('Sila sahkan sekali lagi. Tindakan ini TIDAK BOLEH ditarik balik.')) {
+                            localStorage.clear();
+                            alert('Semua data telah dikosongkan.');
+                            window.location.reload();
+                        }
+                    }
+                },
+
+                eksportCSV() {
+                    let baris = [['ID Sales', 'Tarikh', 'Masa', 'Pelanggan', 'Kaedah Bayaran', 'Jumlah Jualan (RM)', 'Nota']];
+                    this.senaraiSales.forEach(s => {
+                        baris.push([s.id, s.tarikh, s.masa, s.nama_pelanggan || '-', s.kaedah_pembayaran, s.jumlah_keseluruhan.toFixed(2), s.nota || '-']);
+                    });
+                    
+                    let csvContent = "data:text/csv;charset=utf-8," + baris.map(e => e.join(",")).join("\n");
+                    let encodedUri = encodeURI(csvContent);
+                    let link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "Laporan_Jualan_" + this.pilihanLaporan.tempoh + ".csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
+
+                eksportCetak() {
+                    window.print();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
